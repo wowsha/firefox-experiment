@@ -200,16 +200,15 @@ jobs:
           Copy-Item .github/custom/mozconfig src/.mozconfig
           python .github/custom/configure_firefox.py src
 
-      - name: Bootstrap and build Firefox
+      - name: Bootstrap and build Firefox (MozillaBuild bash)
         shell: pwsh
+        working-directory: src
         run: |
           $env:MOZILLABUILD = "C:/mozilla-build/"
-          $env:MACH_PS1_USE_MOZILLABUILD = "1"
-          Set-Location src
-          & .\mach.ps1 bootstrap --no-interactive --application-choice=browser
-          if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap failed with exit code $LASTEXITCODE" }
-          & .\mach.ps1 build
-          if ($LASTEXITCODE -ne 0) { throw "Firefox build failed with exit code $LASTEXITCODE" }
+          $src = (Get-Location).Path -replace '\\', '/'
+          $cmd = "cd `"`$(cygpath -u '$src')`" && ./mach bootstrap --no-interactive --application-choice=browser && ./mach build"
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
+          if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap or build failed with exit code $LASTEXITCODE" }
 
       - name: Install signed uBlock Origin extension
         shell: pwsh
