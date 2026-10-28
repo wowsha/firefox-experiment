@@ -60,7 +60,9 @@ class ConfigureFirefoxTests(unittest.TestCase):
         MODULE.configure_firefox(self.root)
 
         prefs = (self.root / "browser/app/profile/firefox.js").read_text(encoding="utf-8")
-        self.assertIn('pref("browser.startup.homepage", "about:blank");', prefs)
+        self.assertIn('pref("browser.startup.homepage", "about:home");', prefs)
+        self.assertIn('pref("browser.newtabpage.activity-stream.default.sites", "");', prefs)
+        self.assertIn('pref("browser.newtabpage.activity-stream.feeds.topsites", true);', prefs)
         self.assertIn('pref("browser.ml.enable", false);', prefs)
         self.assertEqual(prefs.count(MODULE.PREFS_MARKER), 1)
 

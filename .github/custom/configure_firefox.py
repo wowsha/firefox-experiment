@@ -13,12 +13,14 @@ PREFS_MARKER = "// Browser project defaults (managed by .github/custom/configure
 NO_BOOKMARKS_MARKER = "MINIMAL_BROWSER_NO_DEFAULT_BOOKMARKS"
 
 PREFS = [
-    'pref("browser.startup.homepage", "about:blank");',
-    'pref("browser.startup.page", 0);',
-    'pref("browser.newtabpage.enabled", false);',
+    'pref("browser.startup.homepage", "about:home");',
+    'pref("browser.startup.page", 1);',
+    'pref("browser.newtabpage.enabled", true);',
+    'pref("browser.newtabpage.activity-stream.default.sites", "");',
+    'pref("browser.topsites.useRemoteSetting", false);',
     'pref("browser.newtabpage.activity-stream.showSponsored", false);',
     'pref("browser.newtabpage.activity-stream.showSponsoredTopSites", false);',
-    'pref("browser.newtabpage.activity-stream.feeds.topsites", false);',
+    'pref("browser.newtabpage.activity-stream.feeds.topsites", true);',
     'pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);',
     'pref("browser.newtabpage.activity-stream.feeds.section.highlights", false);',
     'pref("browser.newtabpage.activity-stream.showSearch", false);',
