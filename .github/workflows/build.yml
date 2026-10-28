@@ -78,7 +78,7 @@ jobs:
 
       - name: Build Firefox
         working-directory: src
-        run: ./mach build
+        run: ./mach build -v
 
       - name: Install signed uBlock Origin extension
         shell: bash
@@ -202,7 +202,7 @@ jobs:
         run: |
           $env:MOZILLABUILD = "C:/mozilla-build/"
           $src = (Get-Location).Path -replace '\\', '/'
-          $cmd = "cd `"`$(cygpath -u '$src')`" && python3 python/mozboot/bin/bootstrap.py --no-interactive --application-choice=browser && ./mach build"
+          $cmd = "cd `"`$(cygpath -u '$src')`" && python3 python/mozboot/bin/bootstrap.py --no-interactive --application-choice=browser && ./mach build -v"
           & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
           if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap or build failed with exit code $LASTEXITCODE" }
 
