@@ -80,6 +80,15 @@ jobs:
         working-directory: src
         run: ./mach build -v
 
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-linux
+          path: src/obj-browser/.mozbuild/logs
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Install signed uBlock Origin extension
         shell: bash
         run: |
@@ -205,6 +214,15 @@ jobs:
           $cmd = "cd `"`$(cygpath -u '$src')`" && python3 python/mozboot/bin/bootstrap.py --no-interactive --application-choice=browser && ./mach build -v"
           & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
           if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap or build failed with exit code $LASTEXITCODE" }
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-windows
+          path: src/obj-browser/.mozbuild/logs
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Install signed uBlock Origin extension
         shell: pwsh
