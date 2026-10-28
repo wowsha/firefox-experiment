@@ -18,10 +18,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: browser-build-${{ github.run_number % 5 }}
-  cancel-in-progress: false
-
 jobs:
   linux:
     name: Linux x86_64 (.deb + screenshot)
