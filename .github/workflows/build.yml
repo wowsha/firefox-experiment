@@ -66,6 +66,16 @@ jobs:
           rustup default 1.95.0
           rustc --version
 
+      - name: Fetch linux_syscall_support.h for the crash reporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest=src/toolkit/crashreporter/google-breakpad/src/third_party/lss
+          mkdir -p "$dest"
+          curl --fail --location --retry 3 --retry-delay 2 "https://chromium.googlesource.com/linux-syscall-support/+/refs/heads/main/linux_syscall_support.h?format=TEXT" | base64 -d > "$dest/linux_syscall_support.h"
+          test -s "$dest/linux_syscall_support.h"
+          grep -q "linux_syscall_support" "$dest/linux_syscall_support.h"
+
       - name: Configure Firefox source
         shell: bash
         run: |
