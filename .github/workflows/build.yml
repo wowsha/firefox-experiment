@@ -124,6 +124,7 @@ jobs:
           mkdir -p artifacts
           cd src
           export DISPLAY=:91
+          mkdir -p "$GITHUB_WORKSPACE/.ci-profile-linux"
           Xvfb "$DISPLAY" -screen 0 1366x900x24 >/tmp/browser-xvfb.log 2>&1 &
           XVFB_PID=$!
           sleep 2
