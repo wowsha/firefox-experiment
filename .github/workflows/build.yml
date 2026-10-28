@@ -1,0 +1,275 @@
+name: Build and test Browser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/custom/**"
+      - ".github/workflows/build.yml"
+      - ".github/workflows/update.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Update Firefox ESR"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux x86_64 (.deb + screenshot)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Free disk space for the Firefox toolchain
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Checkout build configuration
+        uses: actions/checkout@v4
+
+      - name: Checkout Firefox ESR source
+        uses: actions/checkout@v4
+        with:
+          ref: esr
+          path: src
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install screenshot and build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb openbox python3-pil dpkg-dev curl unzip
+
+      - name: Test the customization overlay
+        run: |
+          python .github/custom/test_configure.py
+          python -m py_compile .github/custom/configure_firefox.py .github/custom/test_configure.py
+
+      - name: Configure Firefox source
+        shell: bash
+        run: |
+          cp .github/custom/mozconfig src/.mozconfig
+          python .github/custom/configure_firefox.py src
+
+      - name: Bootstrap Firefox build dependencies
+        working-directory: src
+        run: python3 python/mozboot/bin/bootstrap.py --no-interactive --application-choice=browser
+
+      - name: Build Firefox
+        working-directory: src
+        run: ./mach build
+
+      - name: Install signed uBlock Origin extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          extension_dir="src/obj-browser/dist/bin/distribution/extensions"
+          mkdir -p "$extension_dir"
+          curl --fail --location --retry 3 --retry-delay 2 "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi" --output "$extension_dir/uBlock0@raymondhill.net.xpi"
+          unzip -t "$extension_dir/uBlock0@raymondhill.net.xpi"
+          policy_dir="src/obj-browser/dist/bin/distribution"
+          mkdir -p "$policy_dir"
+          cat > "$policy_dir/policies.json" <<'JSON'
+          {
+            "policies": {
+              "ExtensionSettings": {
+                "uBlock0@raymondhill.net": {
+                  "installation_mode": "force_installed",
+                  "install_url": "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+                }
+              }
+            }
+          }
+          JSON
+          python -m json.tool "$policy_dir/policies.json" >/dev/null
+
+      - name: Run existing Firefox regression tests
+        working-directory: src
+        run: |
+          ./mach test browser/components/newtab/test/xpcshell
+          ./mach test browser/components/places/tests
+
+      - name: Package Firefox
+        working-directory: src
+        run: ./mach package
+
+      - name: Build Debian package
+        run: |
+          mkdir -p artifacts
+          bash .github/custom/package_linux.sh "$GITHUB_WORKSPACE/src" "$GITHUB_WORKSPACE/artifacts"
+
+      - name: Capture browser UI screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cd src
+          export DISPLAY=:91
+          Xvfb "$DISPLAY" -screen 0 1366x900x24 >/tmp/browser-xvfb.log 2>&1 &
+          XVFB_PID=$!
+          sleep 2
+          openbox >/tmp/browser-openbox.log 2>&1 &
+          WM_PID=$!
+          trap 'kill "$WM_PID" "$XVFB_PID" 2>/dev/null || true' EXIT
+          ./obj-browser/dist/bin/firefox --no-remote --profile "$GITHUB_WORKSPACE/.ci-profile-linux" about:blank >/tmp/browser-firefox.log 2>&1 &
+          BROWSER_PID=$!
+          sleep 12
+          python - <<'PY'
+          from PIL import ImageGrab
+          image = ImageGrab.grab()
+          image.save("../artifacts/browser-linux.png")
+          if image.width < 800 or image.height < 600:
+              raise SystemExit("Screenshot dimensions are unexpectedly small")
+          PY
+          kill "$BROWSER_PID" 2>/dev/null || true
+          test -s "$GITHUB_WORKSPACE/artifacts/browser-linux.png"
+
+      - name: Upload Linux installer and screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-linux-x86_64
+          path: |
+            artifacts/*.deb
+            artifacts/browser-linux.png
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows x64 (installer + screenshot)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-2022
+    timeout-minutes: 360
+    steps:
+      - name: Checkout build configuration
+        uses: actions/checkout@v4
+
+      - name: Checkout Firefox ESR source
+        uses: actions/checkout@v4
+        with:
+          ref: esr
+          path: src
+          fetch-depth: 1
+
+      - name: Install MozillaBuild
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP "MozillaBuildSetup.exe"
+          Invoke-WebRequest -Uri "https://ftp.mozilla.org/pub/mozilla/libraries/win32/MozillaBuildSetup-Latest.exe" -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+          if (!(Test-Path "C:/mozilla-build/start-shell.bat")) {
+            throw "MozillaBuild installation did not create C:/mozilla-build/start-shell.bat"
+          }
+
+      - name: Test overlay and configure Firefox source
+        shell: pwsh
+        run: |
+          python .github/custom/test_configure.py
+          python -m py_compile .github/custom/configure_firefox.py .github/custom/test_configure.py
+          Copy-Item .github/custom/mozconfig src/.mozconfig
+          python .github/custom/configure_firefox.py src
+
+      - name: Bootstrap and build Firefox
+        shell: pwsh
+        run: |
+          $env:MOZILLABUILD = "C:/mozilla-build/"
+          $env:MACH_PS1_USE_MOZILLABUILD = "1"
+          Set-Location src
+          & .\mach.ps1 bootstrap --no-interactive --application-choice=browser
+          if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap failed with exit code $LASTEXITCODE" }
+          & .\mach.ps1 build
+          if ($LASTEXITCODE -ne 0) { throw "Firefox build failed with exit code $LASTEXITCODE" }
+
+      - name: Install signed uBlock Origin extension
+        shell: pwsh
+        run: |
+          $extensionDir = "src/obj-browser/dist/bin/distribution/extensions"
+          New-Item -ItemType Directory -Force -Path $extensionDir | Out-Null
+          curl.exe --fail --location --retry 3 "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi" --output "$extensionDir/uBlock0@raymondhill.net.xpi"
+          if (!(Test-Path "$extensionDir/uBlock0@raymondhill.net.xpi")) {
+            throw "uBlock Origin download failed"
+          }
+          $policyDir = "src/obj-browser/dist/bin/distribution"
+          New-Item -ItemType Directory -Force -Path $policyDir | Out-Null
+          @'
+          {
+            "policies": {
+              "ExtensionSettings": {
+                "uBlock0@raymondhill.net": {
+                  "installation_mode": "force_installed",
+                  "install_url": "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+                }
+              }
+            }
+          }
+          '@ | Set-Content -Encoding ascii "$policyDir/policies.json"
+          python -m json.tool "$policyDir/policies.json" | Out-Null
+
+      - name: Run existing Firefox regression tests
+        shell: pwsh
+        run: |
+          Set-Location src
+          $env:MOZILLABUILD = "C:/mozilla-build/"
+          $env:MACH_PS1_USE_MOZILLABUILD = "1"
+          & .\mach.ps1 test browser/components/newtab/test/xpcshell
+          if ($LASTEXITCODE -ne 0) { throw "New Tab tests failed with exit code $LASTEXITCODE" }
+          & .\mach.ps1 test browser/components/places/tests
+          if ($LASTEXITCODE -ne 0) { throw "Places tests failed with exit code $LASTEXITCODE" }
+
+      - name: Package full Windows installer
+        shell: pwsh
+        run: |
+          Set-Location src
+          $env:MOZILLABUILD = "C:/mozilla-build/"
+          $env:MACH_PS1_USE_MOZILLABUILD = "1"
+          & .\mach.ps1 package
+          if ($LASTEXITCODE -ne 0) { throw "Firefox packaging failed with exit code $LASTEXITCODE" }
+          $installer = Get-ChildItem "obj-browser/dist" -Filter "*.installer.exe" -File | Select-Object -First 1
+          if (!$installer) {
+            $installer = Get-ChildItem "obj-browser/dist" -Filter "*setup*.exe" -File | Select-Object -First 1
+          }
+          if (!$installer) {
+            Get-ChildItem "obj-browser/dist" -Recurse -Filter "*.exe" | Select-Object FullName
+            throw "mach package did not produce a full installer .exe"
+          }
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/artifacts" | Out-Null
+          Copy-Item $installer.FullName "$env:GITHUB_WORKSPACE/artifacts/BrowserSetup.exe"
+
+      - name: Capture browser start-page screenshot
+        shell: pwsh
+        run: |
+          $binary = (Resolve-Path "src/obj-browser/dist/bin/firefox.exe").Path
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $shot = Join-Path $env:GITHUB_WORKSPACE "artifacts/browser-windows.png"
+          & $binary --headless --no-remote --screenshot $shot --window-size 1366,900 about:blank
+          if (!(Test-Path $shot) -or (Get-Item $shot).Length -lt 1000) {
+            throw "Firefox failed to capture its start page"
+          }
+
+      - name: Upload Windows installer and screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-windows-x64
+          path: |
+            artifacts/BrowserSetup.exe
+            artifacts/browser-windows.png
+          if-no-files-found: error
+          retention-days: 30

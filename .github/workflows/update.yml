@@ -1,0 +1,71 @@
+name: Update Firefox ESR
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "ESR release tag, or 'latest' to discover the newest ESR tag"
+        required: false
+        default: "latest"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-firefox-esr
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Import latest Firefox ESR source snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Select ESR release tag
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$REQUESTED_TAG" || "$REQUESTED_TAG" == "latest" ]]; then
+            TAG="$(git ls-remote --tags --refs https://github.com/mozilla-firefox/firefox.git 'FIREFOX_*esr_RELEASE' \
+              | awk '{ sub(".*/", "", $2); print $2 }' \
+              | sort -V | tail -n 1)"
+          else
+            TAG="$REQUESTED_TAG"
+            if [[ ! "$TAG" =~ ^FIREFOX_[0-9]+(_[0-9]+)*esr_RELEASE$ ]]; then
+              echo "Invalid ESR release tag: $TAG" >&2
+              exit 2
+            fi
+            git ls-remote --exit-code --tags --refs https://github.com/mozilla-firefox/firefox.git "refs/tags/$TAG" >/dev/null
+          fi
+          if [[ -z "$TAG" ]]; then
+            echo "Could not discover an upstream ESR release tag" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Selected upstream tag: $TAG"
+
+      - name: Import upstream Firefox snapshot and update esr branch
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$TAG" https://github.com/mozilla-firefox/firefox.git source
+          cd source
+          rm -rf .git .github/workflows
+          git init -b esr
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import Firefox ESR snapshot $TAG"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:esr
+
+      - name: Report imported version
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: echo "Updated esr to upstream Firefox release $TAG. A successful update triggers build.yml."
