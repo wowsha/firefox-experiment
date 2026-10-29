@@ -225,13 +225,13 @@ jobs:
           & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
           if ($LASTEXITCODE -ne 0) { throw "Firefox bootstrap or build failed with exit code $LASTEXITCODE" }
 
-      - name: Re-run failing Rust library target with full output (Windows)
+      - name: Re-run failing Windows build with make command output
         if: failure()
         shell: pwsh
         working-directory: src
         run: |
-          $dir = ((Get-Location).Path + "/obj-browser/toolkit/library/rust") -replace '\\', '/'
-          $cmd = "cd `"`$(cygpath -u '$dir')`" && mozmake V=1 compile 2>&1 | tail -200"
+          $dir = ((Get-Location).Path + "/obj-browser") -replace '\\', '/'
+          $cmd = "cd `"`$(cygpath -u '$dir')`" && mozmake V=1 2>&1 | tail -300"
           & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
           exit 0
 
