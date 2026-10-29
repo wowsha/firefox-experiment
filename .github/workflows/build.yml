@@ -99,6 +99,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Run existing Firefox regression tests
+        working-directory: src
+        run: |
+          xvfb-run -a ./mach test browser/components/newtab/test/xpcshell
+          xvfb-run -a ./mach test browser/components/places/tests
+
       - name: Install signed uBlock Origin extension
         shell: bash
         run: |
@@ -122,12 +128,6 @@ jobs:
           }
           JSON
           python -m json.tool "$policy_dir/policies.json" >/dev/null
-
-      - name: Run existing Firefox regression tests
-        working-directory: src
-        run: |
-          xvfb-run -a ./mach test browser/components/newtab/test/xpcshell
-          xvfb-run -a ./mach test browser/components/places/tests
 
       - name: Package Firefox
         working-directory: src
@@ -244,6 +244,16 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Run existing Firefox regression tests
+        shell: pwsh
+        run: |
+          $env:MOZILLABUILD = "C:/mozilla-build/"
+          $src = ((Get-Location).Path + "/src") -replace '\\', '/'
+          $cmd = "cd `"`$(cygpath -u '$src')`" && ./mach test browser/components/newtab/test/xpcshell && ./mach test browser/components/places/tests"
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
+          if ($LASTEXITCODE -ne 0) { throw "Firefox regression tests failed with exit code $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "Places tests failed with exit code $LASTEXITCODE" }
+
       - name: Install signed uBlock Origin extension
         shell: pwsh
         run: |
@@ -268,16 +278,6 @@ jobs:
           }
           '@ | Set-Content -Encoding ascii "$policyDir/policies.json"
           python -m json.tool "$policyDir/policies.json" | Out-Null
-
-      - name: Run existing Firefox regression tests
-        shell: pwsh
-        run: |
-          $env:MOZILLABUILD = "C:/mozilla-build/"
-          $src = ((Get-Location).Path + "/src") -replace '\\', '/'
-          $cmd = "cd `"`$(cygpath -u '$src')`" && ./mach test browser/components/newtab/test/xpcshell && ./mach test browser/components/places/tests"
-          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
-          if ($LASTEXITCODE -ne 0) { throw "Firefox regression tests failed with exit code $LASTEXITCODE" }
-          if ($LASTEXITCODE -ne 0) { throw "Places tests failed with exit code $LASTEXITCODE" }
 
       - name: Package full Windows installer
         shell: pwsh
