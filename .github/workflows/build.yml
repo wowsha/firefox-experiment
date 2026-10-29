@@ -126,8 +126,8 @@ jobs:
       - name: Run existing Firefox regression tests
         working-directory: src
         run: |
-          ./mach test browser/components/newtab/test/xpcshell
-          ./mach test browser/components/places/tests
+          xvfb-run -a ./mach test browser/components/newtab/test/xpcshell
+          xvfb-run -a ./mach test browser/components/places/tests
 
       - name: Package Firefox
         working-directory: src
