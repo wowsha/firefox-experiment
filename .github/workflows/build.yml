@@ -272,12 +272,11 @@ jobs:
       - name: Run existing Firefox regression tests
         shell: pwsh
         run: |
-          Set-Location src
           $env:MOZILLABUILD = "C:/mozilla-build/"
-          $env:MACH_PS1_USE_MOZILLABUILD = "1"
-          & .\mach.ps1 test browser/components/newtab/test/xpcshell
-          if ($LASTEXITCODE -ne 0) { throw "New Tab tests failed with exit code $LASTEXITCODE" }
-          & .\mach.ps1 test browser/components/places/tests
+          $src = ((Get-Location).Path + "/src") -replace '\\', '/'
+          $cmd = "cd `"`$(cygpath -u '$src')`" && ./mach test browser/components/newtab/test/xpcshell && ./mach test browser/components/places/tests"
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
+          if ($LASTEXITCODE -ne 0) { throw "Firefox regression tests failed with exit code $LASTEXITCODE" }
           if ($LASTEXITCODE -ne 0) { throw "Places tests failed with exit code $LASTEXITCODE" }
 
       - name: Package full Windows installer
