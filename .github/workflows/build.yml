@@ -158,7 +158,7 @@ jobs:
           ./obj-browser/dist/bin/firefox --no-remote --profile "$GITHUB_WORKSPACE/.ci-profile-linux" about:blank >/tmp/browser-firefox.log 2>&1 &
           BROWSER_PID=$!
           sleep 12
-          python - <<'PY'
+          /usr/bin/python3 - <<'PY'
           from PIL import ImageGrab
           image = ImageGrab.grab()
           image.save("../artifacts/browser-linux.png")
