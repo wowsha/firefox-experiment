@@ -94,8 +94,8 @@ def main() -> None:
 
     # ReadFile and WriteFile require LPDWORD, which is unsigned long* on
     # Windows. PRUint32/PRInt32 are distinct pointer types under clang-cl.
-    replace_once(w95io, "  PRUint32 bytes;\\n", "  DWORD bytes;\\n")
-    replace_once(w95io, "  PRInt32 bytes;\\n", "  DWORD bytes;\\n")
+    replace_once(w95io, "  PRUint32 bytes;\n", "  DWORD bytes;\n")
+    replace_once(w95io, "  PRInt32 bytes;\n", "  DWORD bytes;\n")
 
     print("Windows NSPR pointer-width fixes are present.")
 
