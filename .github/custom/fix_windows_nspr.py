@@ -39,6 +39,64 @@ def main() -> None:
         contents = path.read_text(encoding="utf-8")
         if "ioctlsocket(fd->secret->md.osfd, FIONREAD, &result)" in contents and "  PRInt32 result;" in contents:
             raise SystemExit(f"Unpatched FIONREAD result in {path}")
+
+
+    ntmisc = root / "nsprpub/pr/src/md/windows/ntmisc.c"
+    w95io = root / "nsprpub/pr/src/md/windows/w95io.c"
+    if not ntmisc.is_file() or not w95io.is_file():
+        raise SystemExit(f"Additional Windows NSPR source files not found under {root}")
+
+    # GetExitCodeProcess writes a DWORD. Keep NSPR's PRInt32 API intact by
+    # receiving into a correctly typed local and converting after the call.
+    replace_once(
+        ntmisc,
+        """PRStatus _PR_WaitWindowsProcess(PRProcess* process, PRInt32* exitCode) {
+  DWORD dwRetVal;
+
+  dwRetVal = WaitForSingleObject(process->md.handle, INFINITE);
+  if (dwRetVal == WAIT_FAILED) {
+    PR_SetError(PR_UNKNOWN_ERROR, GetLastError());
+    return PR_FAILURE;
+  }
+  PR_ASSERT(dwRetVal == WAIT_OBJECT_0);
+  if (exitCode != NULL &&
+      GetExitCodeProcess(process->md.handle, exitCode) == FALSE) {
+    PR_SetError(PR_UNKNOWN_ERROR, GetLastError());
+    return PR_FAILURE;
+  }
+  CloseHandle(process->md.handle);
+  PR_DELETE(process);
+  return PR_SUCCESS;
+}""",
+        """PRStatus _PR_WaitWindowsProcess(PRProcess* process, PRInt32* exitCode) {
+  DWORD dwRetVal;
+  DWORD dwExitCode;
+
+  dwRetVal = WaitForSingleObject(process->md.handle, INFINITE);
+  if (dwRetVal == WAIT_FAILED) {
+    PR_SetError(PR_UNKNOWN_ERROR, GetLastError());
+    return PR_FAILURE;
+  }
+  PR_ASSERT(dwRetVal == WAIT_OBJECT_0);
+  if (exitCode != NULL &&
+      GetExitCodeProcess(process->md.handle, &dwExitCode) == FALSE) {
+    PR_SetError(PR_UNKNOWN_ERROR, GetLastError());
+    return PR_FAILURE;
+  }
+  if (exitCode != NULL) {
+    *exitCode = (PRInt32)dwExitCode;
+  }
+  CloseHandle(process->md.handle);
+  PR_DELETE(process);
+  return PR_SUCCESS;
+}""",
+    )
+
+    # ReadFile and WriteFile require LPDWORD, which is unsigned long* on
+    # Windows. PRUint32/PRInt32 are distinct pointer types under clang-cl.
+    replace_once(w95io, "  PRUint32 bytes;\\n", "  DWORD bytes;\\n")
+    replace_once(w95io, "  PRInt32 bytes;\\n", "  DWORD bytes;\\n")
+
     print("Windows NSPR pointer-width fixes are present.")
 
 
