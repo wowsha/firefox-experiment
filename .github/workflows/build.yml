@@ -200,6 +200,10 @@ jobs:
           path: src
           fetch-depth: 1
 
+      - name: Patch Windows NSPR Winsock pointer types
+        shell: pwsh
+        run: python .github/custom/fix_windows_nspr.py src
+
       - name: Install MozillaBuild
         shell: pwsh
         run: |
