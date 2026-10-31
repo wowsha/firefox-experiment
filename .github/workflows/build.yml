@@ -256,8 +256,8 @@ jobs:
         run: |
           $env:MOZILLABUILD = "C:/mozilla-build/"
           $src = ((Get-Location).Path + "/src") -replace '\\', '/'
-          $cmd = "cd `\"`$(cygpath -u '$src')`\" && ./mach test browser/components/newtab/test/xpcshell"
-          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
+          $unixSrc = & "C:/mozilla-build/msys2/usr/bin/cygpath.exe" -u $src
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc "cd '$unixSrc' && ./mach test browser/components/newtab/test/xpcshell"
           if ($LASTEXITCODE -ne 0) { throw "New Tab tests failed with exit code $LASTEXITCODE" }
 
       - name: Run Places regression tests (Windows, non-blocking)
@@ -266,8 +266,8 @@ jobs:
         run: |
           $env:MOZILLABUILD = "C:/mozilla-build/"
           $src = ((Get-Location).Path + "/src") -replace '\\', '/'
-          $cmd = "cd `\"`$(cygpath -u '$src')`\" && ./mach test browser/components/places/tests"
-          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc $cmd
+          $unixSrc = & "C:/mozilla-build/msys2/usr/bin/cygpath.exe" -u $src
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc "cd '$unixSrc' && ./mach test browser/components/places/tests"
 
       - name: Install signed uBlock Origin extension
         shell: pwsh
