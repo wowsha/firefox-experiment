@@ -299,8 +299,8 @@ jobs:
         run: |
           Set-Location src
           $env:MOZILLABUILD = "C:/mozilla-build/"
-          $env:MACH_PS1_USE_MOZILLABUILD = "1"
-          & .\mach.ps1 package
+          $unixSrc = & "C:/mozilla-build/msys2/usr/bin/cygpath.exe" -u (Get-Location).Path
+          & "C:/mozilla-build/msys2/usr/bin/bash.exe" -lc "cd '$unixSrc' && ./mach package"
           if ($LASTEXITCODE -ne 0) { throw "Firefox packaging failed with exit code $LASTEXITCODE" }
           $installer = Get-ChildItem "obj-browser/dist" -Filter "*.installer.exe" -File | Select-Object -First 1
           if (!$installer) {
