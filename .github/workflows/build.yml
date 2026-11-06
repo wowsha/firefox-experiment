@@ -320,8 +320,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           $shot = Join-Path $env:GITHUB_WORKSPACE "artifacts/browser-windows.png"
           & $binary --headless --no-remote --screenshot $shot --window-size 1366,900 about:blank
+          # Firefox may finish writing the screenshot just after its launcher returns.
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Get-Date) -lt $deadline) {
+            if ((Test-Path $shot) -and (Get-Item $shot).Length -ge 1000) {
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
           if (!(Test-Path $shot) -or (Get-Item $shot).Length -lt 1000) {
-            throw "Firefox failed to capture its start page"
+            throw "Firefox did not produce a usable start-page screenshot within 30 seconds"
           }
 
       - name: Upload Windows installer and screenshot
